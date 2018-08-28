@@ -14,6 +14,7 @@ import ImageListItem from './components/ImageListItem'
 import config from './config'
 
 const SafeAreaFlatList = withSafeArea(FlatList, 'contentInset')
+const StatusBar = withSafeArea(View, 'padding', 'bottom')
 
 const apiUri = 'https://api.flickr.com/services/rest?method=flickr.photos.search&text=cat&sort=relevance&format=json&nojsoncallback=1&extras=url_n'
 const cellCount = 2
@@ -30,12 +31,14 @@ type ImageListItemData = {
 type Props = {};
 type State = {
   imageListItems: Array<ImageListItemData>,
+  statusText: string,
 };
 
 class App extends React.Component<Props, State> {
   static defaultProps = {}
   state = {
     imageListItems: [],
+    statusText: 'Up-to-date.',
   }
   imageSize = 0
   renderItem = this.renderItem.bind(this)
@@ -46,6 +49,36 @@ class App extends React.Component<Props, State> {
 
     this.fetchImages()
   }
+
+  codePushStatusDidChange(status: number): void {
+    switch(status) {
+      case codePush.SyncStatus.CHECKING_FOR_UPDATE:
+        this.updateStatusText('Checking for updates.')
+        break
+
+      case codePush.SyncStatus.DOWNLOADING_PACKAGE:
+        codePush.getUpdateMetadata(codePush.UpdateState.LATEST)
+          .then(metadata => this.updateStatusText(`Downloading package ${metadata.label}.`))
+        break
+
+      case codePush.SyncStatus.INSTALLING_UPDATE:
+        codePush.getUpdateMetadata(codePush.UpdateState.LATEST)
+          .then(metadata => this.updateStatusText(`Installing update ${metadata.label}.`))
+        break
+
+      case codePush.SyncStatus.UP_TO_DATE:
+        this.updateStatusText('Up-to-date.')
+        break
+
+      case codePush.SyncStatus.UPDATE_INSTALLED:
+        codePush.getUpdateMetadata(codePush.UpdateState.LATEST)
+          .then(metadata => this.updateStatusText(`Update ${metadata.label} installed.`))
+        break
+
+      default:
+        break
+    }
+ }
 
   async fetchImages(): Promise<void> {
     const response = await fetch(
@@ -98,6 +131,10 @@ class App extends React.Component<Props, State> {
     this.setState({ imageListItems })
   }
 
+  updateStatusText(statusText: string): void {
+    this.setState({ statusText })
+  }
+
   renderItem({ item }: { item: ImageListItemData }): React.Node {
     return (
       <ImageListItem
@@ -110,25 +147,32 @@ class App extends React.Component<Props, State> {
 
   render(): React.Node {
     const { imageListItems } = this.state
-    if (imageListItems.length < 1) {
-      return (
-        <View style={styles.loadingTextContainer}>
-          <Text style={styles.loadingText}>
-            {'Searching for images...'}
-          </Text>
-        </View>
-      )
-    }
 
     return (
-      <SafeAreaFlatList
-        style={styles.container}
-        renderItem={this.renderItem}
-        data={imageListItems}
-        keyExtractor={(_, index) => `${index}`}
-        initialNumToRender={5}
-        removeClippedSubviews
-      />
+      <View style={styles.container}>
+        {
+          imageListItems.length < 1
+            ? (
+              <View style={styles.loadingTextContainer}>
+                <Text style={styles.loadingText}>
+                  {'Searching for images...'}
+                </Text>
+              </View>
+            )
+            : (
+              <SafeAreaFlatList
+                renderItem={this.renderItem}
+                data={imageListItems}
+                keyExtractor={(_, index) => `${index}`}
+                initialNumToRender={5}
+                removeClippedSubviews
+              />
+            )
+        }
+        <StatusBar style={styles.statusBar}>
+          <Text style={styles.statusText}>{this.state.statusText}</Text>
+        </StatusBar>
+      </View>
     )
   }
 }
@@ -144,8 +188,21 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   loadingText: {
-    fontSize: 16,
+    fontSize: 20,
     color: '#000000',
+  },
+  statusBar: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    paddingVertical: 4,
+    backgroundColor: '#ffffff99',
+  },
+  statusText: {
+    fontSize: 20,
+    color: '#000000',
+    textAlign: 'center',
   },
 })
 
